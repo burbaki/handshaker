@@ -8,15 +8,14 @@ import scodec.bits.ByteVector
 
 object ClientTestHelper {
 
-
-  def getEncryptedData(pQInnerData: PQInnerData, pk: PublicKey) = {
+  def getEncryptedData(pQInnerData: PQInnerData, public: PublicKey) = {
     val encoded = pQInnerData.encode
     val digest = encoded.digest(MessageDigest.getInstance("SHA1"))
     val withoutPadding = digest ++ encoded
     val dataWithHash = withoutPadding ++ ByteVector.fill(255 - withoutPadding.size)(0)
 
     val cipher = Cipher.getInstance("RSA/ECB/NoPadding")
-    cipher.init(Cipher.ENCRYPT_MODE, pk)
+    cipher.init(Cipher.ENCRYPT_MODE, public)
     ByteVector(cipher.doFinal(dataWithHash.toArray))
   }
 }

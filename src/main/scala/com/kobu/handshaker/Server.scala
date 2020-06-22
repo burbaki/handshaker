@@ -12,7 +12,7 @@ object Server {
 
   def accept(server: AsynchronousServerSocketChannel, handler: TcpHandler): RIO[Blocking, AsynchronousSocketChannel] = {
     val x: RIO[Blocking, AsynchronousSocketChannel] = ZIO.fromFutureJava(server.accept).map(s => {
-      println(s"new connection for: ${s}");
+      println(s"new connection for: $s")
       s
     })
     x.flatMap(channel => handler.handle(channel))
@@ -30,12 +30,7 @@ object Server {
     ZIO.fromFutureJava(conn.write(buf))
   }
 
-  def requstsListener(server: RIO[Blocking, AsynchronousServerSocketChannel], handler: TcpHandler): RIO[Blocking, AsynchronousServerSocketChannel] = {
-    server.flatMap(accept(_, handler)).forever
+  def requestsListener(server: RIO[Blocking, AsynchronousServerSocketChannel], handler: TcpHandler):
+  RIO[Blocking, AsynchronousServerSocketChannel] = server.flatMap(accept(_, handler)).forever
 
-  }
-
-  def main() = {
-
-  }
 }

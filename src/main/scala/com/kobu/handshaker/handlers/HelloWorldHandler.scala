@@ -14,5 +14,6 @@ class HelloWorldHandler extends TcpHandler {
       write(channel, res).map(_ => channel)
     })
 
-  override val nextTcpHandler: Option[TcpHandler] = None
+  override val nextTcpHandler = None
+  override val internalStateR = null
 }

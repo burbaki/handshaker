@@ -1,5 +1,10 @@
 package com.kobu.handshaker
 
+import java.security.MessageDigest
+
+import com.kobu.handshaker.MessageEncodeDecode._
+import scodec.bits.ByteVector
+
 import scala.math.BigInt
 import scala.util.Random
 
@@ -7,18 +12,13 @@ object CryptoUtils {
 
   def FermatFactor(N: BigInt): (BigInt, BigInt) = {
     var a = BigInt(N.bigInteger.sqrt()) + 1
-    println(s"a:  $a")
     var b2 = (a * a) - N
-    println(s"a2:  ${a * a}")
-    println(s"b2:  $b2")
     while (!isSquare(b2)) {
       a = a + 1
       b2 = a * a - N
     }
     val r1 = a - b2.bigInteger.sqrt()
-    println(r1)
     val r2 = N / r1
-    println(r2)
     (r1, r2)
   }
 
@@ -36,5 +36,13 @@ object CryptoUtils {
       first -> second
     else
       second -> first
+  }
+
+  def getEncryptedData(dHInnerData: DHInnerData) = {
+    val encoded = dHInnerData.encode
+    val digest = encoded.digest(MessageDigest.getInstance("SHA1"))
+    val withoutPadding = digest ++ encoded
+    val padding = 16 - ((withoutPadding.size) % 16)
+    withoutPadding ++ ByteVector.fill(padding)(0)
   }
 }

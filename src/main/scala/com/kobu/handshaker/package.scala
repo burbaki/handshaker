@@ -5,8 +5,6 @@ import scodec.bits.{ByteVector, _}
 package object handshaker {
 
   implicit val pqHeaderDecoder: MessageDecoder[PqHeader] = (bytes: ByteVector) => {
-    require(bytes.size == messagePqHeaderLength, s"find bytes: ${bytes.size}, but should be $messagePqHeaderLength")
-
     PqHeader(authKeyId = bytes.slice(authKeyIdPosition.start, authKeyIdPosition.end),
       messageId = bytes.slice(messageIdPosition.start, messageIdPosition.end),
       messageBodyLength = bytes.slice(messageBodyLengthPosition.start, messageBodyLengthPosition.end)
@@ -20,7 +18,6 @@ package object handshaker {
 
   implicit val reqPqDecoder: MessageDecoder[ReqPqBody] = (bytes: ByteVector) => {
     val incomeSchemaNumber = bytes.slice(pqSchemaPosition.start, pqSchemaPosition.end)
-    require(incomeSchemaNumber == reqPqNumber)
     ReqPqBody(
       nonce = bytes.slice(pqNoncePosition.start, pqNoncePosition.end))
   }
@@ -30,15 +27,11 @@ package object handshaker {
 
   implicit val respPqDecoder: MessageDecoder[RespPqBody] = (bytes: ByteVector) => {
     val incomeSchemaNumber = bytes.slice(pqSchemaPosition.start, pqSchemaPosition.end)
-    require(incomeSchemaNumber == respPqNumber)
 
     val pqSizeWithoutPadding = bytes.slice(pqSizePosition.start, pqSizePosition.end).toByte(false) + 1
     val padding = 4 - ((pqSizeWithoutPadding) % 4)
     val pqStringSize = pqSizeWithoutPadding + padding
-    val pq = Pq.fromByteVector(bytes.slice(pqPosition(pqStringSize).start, pqPosition(pqStringSize).end))
-
-    require(bytes.slice(pqVectorLongPosition(pqStringSize).start,
-      pqVectorLongPosition(pqStringSize).end) == vectorLong, "incorrect vector schema number")
+    val pq = TcpString.fromByteVector(bytes.slice(pqPosition(pqStringSize).start, pqPosition(pqStringSize).end))
 
     val fingerprintsCount = bytes.slice(fingerprintsCountPosition(pqStringSize).start,
       fingerprintsCountPosition(pqStringSize).end).toInt(false, ByteOrdering.LittleEndian)
@@ -66,9 +59,9 @@ package object handshaker {
   }
 
   implicit val pQInnerDataDecoder: MessageDecoder[PQInnerData] = (bytes: ByteVector) => {
-    PQInnerData(pq = Pq.fromByteVector(bytes.slice(innerDataPqPosition.start, innerDataPqPosition.end)),
-      p = bytes.slice(innerDataPPosition.start, innerDataPPosition.end),
-      q = bytes.slice(innerDataQPosition.start, innerDataQPosition.end),
+    PQInnerData(pq = TcpString.fromByteVector(bytes.slice(innerDataPqPosition.start, innerDataPqPosition.end)),
+      p = TcpString.fromByteVector(bytes.slice(innerDataPPosition.start, innerDataPPosition.end)),
+      q = TcpString.fromByteVector(bytes.slice(innerDataQPosition.start, innerDataQPosition.end)),
       nonce = bytes.slice(innerDataNoncePosition.start, innerDataNoncePosition.end),
       serverNonce = bytes.slice(innerDataServerNoncePosition.start, innerDataServerNoncePosition.end),
       newNonce = bytes.slice(innerDataNewNoncePosition.start, innerDataNewNoncePosition.end))
@@ -77,35 +70,66 @@ package object handshaker {
   implicit val pQInnerDataEncoder: MessageEncoder[PQInnerData] = (message: PQInnerData) =>
     pqInnerDateNumber ++
       message.pq.resultingByteVector ++
-      message.p ++
-      message.q ++
+      message.p.resultingByteVector ++
+      message.q.resultingByteVector ++
       message.nonce ++
       message.serverNonce ++
       message.newNonce
 
-  implicit val reqDHParamsBodyDecoder: MessageDecoder[ReqDHParamsBody] = new MessageDecoder[ReqDHParamsBody] {
-    override def decode(bytes: ByteVector): ReqDHParamsBody = {
-      val incomeSchemaNumber = bytes.slice(pqSchemaPosition.start, pqSchemaPosition.end)
-      require(incomeSchemaNumber == reqDHParamsNumber)
+  implicit val dHInnerDataDecoder: MessageDecoder[DHInnerData] = (bytes: ByteVector) => {
+    DHInnerData(
+      nonce = bytes.slice(dHInnerDataNonce.start, dHInnerDataNonce.end),
+      serverNonce = bytes.slice(dHInnerDataServerNonce.start, dHInnerDataServerNonce.end),
+      g = bytes.slice(dHInnerDataG.start, dHInnerDataG.end),
+      dhPrime = bytes.slice(dHInnerDataDhPrime.start, dHInnerDataDhPrime.end),
+      gA = bytes.slice(dHInnerDataGA.start, dHInnerDataGA.end),
+      serverTime = bytes.slice(dHInnerDataServerTime.start, innerDataNewNoncePosition.end))
+  }
+  implicit val dHInnerDataEncoder: MessageEncoder[DHInnerData] = (message: DHInnerData) => {
+    dHInnerData ++
+      message.nonce ++
+      message.serverNonce ++
+      message.g ++
+      message.dhPrime ++
+      message.gA ++
+      message.serverTime
+  }
 
-      ReqDHParamsBody(
-        nonce = bytes.slice(pqNoncePosition.start, pqNoncePosition.end),
-        serverNonce = bytes.slice(pqServerNoncePosition.start, pqServerNoncePosition.end),
-        p = bytes.slice(reqDHParamsPPosition.start, reqDHParamsPPosition.end),
-        q = bytes.slice(reqDHParamsQPosition.start, reqDHParamsQPosition.end),
-        fingerprint = bytes.slice(reqDHParamsFingerprintPosition.start, reqDHParamsFingerprintPosition.end),
-        encryptedData = bytes.slice(reqDHParamsEncryptedData.start, reqDHParamsEncryptedData.end))
-    }
+  implicit val reqDHParamsBodyDecoder: MessageDecoder[ReqDHParamsBody] = (bytes: ByteVector) => {
+    val incomeSchemaNumber = bytes.slice(pqSchemaPosition.start, pqSchemaPosition.end)
+
+    ReqDHParamsBody(
+      nonce = bytes.slice(pqNoncePosition.start, pqNoncePosition.end),
+      serverNonce = bytes.slice(pqServerNoncePosition.start, pqServerNoncePosition.end),
+      p = TcpString.fromByteVector(bytes.slice(reqDHParamsPPosition.start, reqDHParamsPPosition.end)),
+      q = TcpString.fromByteVector(bytes.slice(reqDHParamsQPosition.start, reqDHParamsQPosition.end)),
+      fingerprint = bytes.slice(reqDHParamsFingerprintPosition.start, reqDHParamsFingerprintPosition.end),
+      encryptedData = bytes.slice(reqDHParamsEncryptedData.start, reqDHParamsEncryptedData.end))
   }
 
   implicit val reqDHParamsBodyEncoder: MessageEncoder[ReqDHParamsBody] = (message: ReqDHParamsBody) => {
     reqDHParamsNumber ++
       message.nonce ++
       message.serverNonce ++
-      message.p ++
-      message.q ++
+      message.p.resultingByteVector ++
+      message.q.resultingByteVector ++
       message.fingerprint ++
       message.encryptedData
+  }
+
+
+  implicit val ServerDHParamsFailEncoder: MessageEncoder[ServerDHParamsFail] = (message: ServerDHParamsFail) => {
+    serverDHParamsFail ++
+      message.nonce ++
+      message.serverNonce
+    message.newNonceHash
+  }
+
+  implicit val ServerDHParamsOkEncoder: MessageEncoder[ServerDHParamsOk] = (message: ServerDHParamsOk) => {
+    serverDHParamsFail ++
+      message.nonce ++
+      message.serverNonce
+    message.encryptedAnswer
   }
 
   val reqPqNumber: ByteVector = hex"60469778".reverse
@@ -113,6 +137,9 @@ package object handshaker {
   val vectorLong: ByteVector = hex"1cb5c415".reverse
   val pqInnerDateNumber: ByteVector = hex"83c95aec".reverse
   val reqDHParamsNumber: ByteVector = hex"d712e4be".reverse
+  val dHInnerData: ByteVector = hex"b5890dba".reverse
+  val serverDHParamsFail: ByteVector = hex"79cb045d".reverse
+  val serverDHParamsOk: ByteVector = hex"d0e8075c".reverse
 
   //POSITIONS
 
@@ -156,4 +183,11 @@ package object handshaker {
 
   val reqDHParamsFingerprintPosition = Position(72 - messagePqHeaderLength, 8)
   val reqDHParamsEncryptedData = Position(80 - messagePqHeaderLength, 256)
+
+  val dHInnerDataNonce = Position(4, 16)
+  val dHInnerDataServerNonce = Position(20, 16)
+  val dHInnerDataG = Position(36, 4)
+  val dHInnerDataDhPrime = Position(40, 260)
+  val dHInnerDataGA = Position(300, 260)
+  val dHInnerDataServerTime = Position(560, 260)
 }

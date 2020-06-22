@@ -3,7 +3,7 @@ package com.kobu.handshaker
 import java.net.InetSocketAddress
 import java.nio.channels.AsynchronousServerSocketChannel
 
-import com.kobu.handshaker.Server.requstsListener
+import com.kobu.handshaker.Server.requestsListener
 import com.kobu.handshaker.handlers.HelloWorldHandler
 import zio.RIO
 
@@ -15,7 +15,7 @@ object App extends scala.App {
   val serverZ = RIO(server)
 
   val runtime = zio.Runtime.default
-  runtime.unsafeRun(requstsListener(serverZ, new HelloWorldHandler))
+  runtime.unsafeRun(requestsListener(serverZ, new HelloWorldHandler))
 
 
   //  implicit val exContext = ExecutionContext.fromExecutorService(Executors.newFixedThreadPool(4))

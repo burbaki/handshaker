@@ -3,46 +3,62 @@ package com.kobu.handshaker
 import java.net.InetSocketAddress
 import java.nio.ByteBuffer
 import java.nio.channels.{AsynchronousServerSocketChannel, AsynchronousSocketChannel}
-import java.security.MessageDigest
+import java.security.{KeyPair, KeyPairGenerator, MessageDigest}
 import java.time.Instant
 
 import com.kobu.handshaker.MessageEncodeDecode._
-import com.kobu.handshaker.Server.requstsListener
+import com.kobu.handshaker.Server.requestsListener
 import com.kobu.handshaker.handlers.TmHandlerPq
-import org.scalatest.BeforeAndAfterAll
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers
+import org.scalatest.{BeforeAndAfterAll, GivenWhenThen}
 import scodec.bits.{ByteOrdering, ByteVector}
-import zio.RIO
+import zio.{RIO, Ref}
 
 import scala.util.Random
 
-class TmHandlerPqTest extends AnyFunSuite with Matchers with BeforeAndAfterAll {
+class TmHandlerPqTest
+  extends AnyFunSuite
+    with Matchers
+    with BeforeAndAfterAll
+    with GivenWhenThen {
 
   final val hostAddress = new InetSocketAddress("127.0.0.1", 4999)
   val runtime = zio.Runtime.default
-  val handler = new TmHandlerPq
+  val keyGen = KeyPairGenerator.getInstance("RSA")
+  keyGen.initialize(2048)
+  val pair: KeyPair = keyGen.generateKeyPair
+  val initServerState = ServerState(pair.getPrivate, pair.getPublic)
+  val state = runtime.unsafeRun(Ref.make(initServerState))
+  val handler = new TmHandlerPq(state)
 
   override def beforeAll() {
     val server = AsynchronousServerSocketChannel.open().bind(hostAddress)
     val serverZ = RIO(server)
-    runtime.unsafeRunAsync_(requstsListener(serverZ, handler))
+    runtime.unsafeRunAsync_(requestsListener(serverZ, handler))
     println("started")
   }
 
 
-  test("tmHandler should accept  rq request and response with rq response") {
+  test("tmHandler should accept rq request and response with rq response") {
     val unixTime: Long = Instant.now.getEpochSecond
-    val reqHeader = PqHeader(ByteVector.fill(8)(0),
+
+    Given("request header for pq")
+    val reqHeaderForPq = PqHeader(ByteVector.fill(8)(0),
       ByteVector.fromLong(unixTime, ordering = ByteOrdering.LittleEndian),
       20)
-    val encodedHeader: ByteVector = reqHeader.encode
-    val request: ReqPqBody = ReqPqBody(
+    val encodedHeader: ByteVector = reqHeaderForPq.encode
+
+    Given("request body for pq")
+    val reqBodyForPq: ReqPqBody = ReqPqBody(
       ByteVector(Random.nextBytes(16)))
-    val encodedRequest: ByteVector = request.encode
+
+    val encodedRequest: ByteVector = reqBodyForPq.encode
 
     val client = AsynchronousSocketChannel.open
     client.connect(hostAddress).get()
+
+    When("client send header and body for pq")
     val rawMessage: ByteBuffer = (encodedHeader ++ encodedRequest).toByteBuffer
     client.write(rawMessage).get()
 
@@ -55,9 +71,53 @@ class TmHandlerPqTest extends AnyFunSuite with Matchers with BeforeAndAfterAll {
     client.read(readBuffForResponse).get
     readBuffForResponse.flip()
     val response = ByteVector(readBuffForResponse).decode[RespPqBody]
-    response.nonce shouldEqual request.nonce
+    val stateAfterPqRequest: ServerState = runtime.unsafeRun(state.get)
+
+    Then("internal state of server should be updated and server should send correct answer")
+    stateAfterPqRequest.pq.isDefined shouldBe true
+    stateAfterPqRequest.p.isDefined shouldBe true
+    stateAfterPqRequest.q.isDefined shouldBe true
+    stateAfterPqRequest.severNonce.isDefined shouldBe true
+    stateAfterPqRequest.nonce.isDefined shouldBe true
+
+    response.nonce shouldEqual reqBodyForPq.nonce
     response.fingerprints.head shouldEqual
-      ByteVector(handler.publicKey.getEncoded).digest(MessageDigest.getInstance("SHA1")).take(8)
+      ByteVector(pair.getPublic.getEncoded).digest(MessageDigest.getInstance("SHA1")).take(8)
+
+    Given("internal data for encrypting")
+    val innerDataRequest = PQInnerData(response.pq,
+      TcpString(4, stateAfterPqRequest.p.get, 8),
+      TcpString(4, stateAfterPqRequest.q.get, 8),
+      response.nonce,
+      response.serverNonce,
+      newNonce = ByteVector(Random.nextBytes(32)))
+    val encrypted = ClientTestHelper.getEncryptedData(innerDataRequest, pair.getPublic)
+
+    Given("request body for DH params")
+    val reqDHParamsBody = ReqDHParamsBody(
+      innerDataRequest.nonce,
+      innerDataRequest.serverNonce,
+      innerDataRequest.p,
+      innerDataRequest.q,
+      response.fingerprints.head,
+      encrypted).encode
+
+    Given("request header for DH params")
+    val reqHeaderForReqDH = PqHeader(ByteVector.fill(8)(0),
+      ByteVector.fromLong(unixTime, ordering = ByteOrdering.LittleEndian),
+      reqDHParamsBody.size.toInt)
+
+    When("send correct request DH params to server")
+    val rawMessageReqDH: ByteBuffer = (reqHeaderForReqDH.encode ++ reqDHParamsBody).toByteBuffer
+    client.write(rawMessageReqDH).get()
+
+    val readBuffForHeaderReqDH = ByteBuffer.allocate(4)
+    client.read(readBuffForHeaderReqDH).get()
+    readBuffForHeaderReqDH.flip()
+    val respSchema = ByteVector(readBuffForHeaderReqDH)
+
+    Then("Server should send serverDHParamsOk message")
+    respSchema shouldBe serverDHParamsOk
   }
 
 }

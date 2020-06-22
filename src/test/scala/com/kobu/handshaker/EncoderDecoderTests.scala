@@ -34,7 +34,7 @@ class EncoderDecoderTests extends AnyFunSuite with Matchers {
     val response: RespPqBody = RespPqBody(
       ByteVector(Random.nextBytes(16)),
       ByteVector(Random.nextBytes(16)),
-      Pq(8, ByteVector(Random.nextBytes(8))),
+      TcpString(8, ByteVector(Random.nextBytes(8))),
       fingerprints = Vector(ByteVector(Random.nextBytes(8))))
     val encoded: ByteVector = response.encode
     val decoded = encoded.decode[RespPqBody]
@@ -45,7 +45,7 @@ class EncoderDecoderTests extends AnyFunSuite with Matchers {
     val response: RespPqBody = RespPqBody(
       ByteVector(Random.nextBytes(16)),
       ByteVector(Random.nextBytes(16)),
-      Pq(8, ByteVector(Random.nextBytes(8))),
+      TcpString(8, ByteVector(Random.nextBytes(8))),
       fingerprints = Vector(ByteVector(Random.nextBytes(8)), ByteVector(Random.nextBytes(8)), ByteVector(Random.nextBytes(8))))
     val encoded: ByteVector = response.encode
     val decoded = encoded.decode[RespPqBody]
@@ -57,7 +57,7 @@ class EncoderDecoderTests extends AnyFunSuite with Matchers {
       ByteVector(Random.nextBytes(16)),
       ByteVector(Random.nextBytes(16)),
       // 1 + 13 == 14 => 14 + 2padding == 16
-      Pq(13, ByteVector(Random.nextBytes(13)), 16),
+      TcpString(13, ByteVector(Random.nextBytes(13)), 16),
       fingerprints = Vector(ByteVector(Random.nextBytes(8))))
     val encoded: ByteVector = response.encode
     val decoded = encoded.decode[RespPqBody]
