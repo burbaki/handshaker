@@ -2,11 +2,11 @@ package com.kobu.handshaker
 
 import java.net.InetSocketAddress
 import java.nio.channels.AsynchronousServerSocketChannel
+import java.security.{KeyPair, KeyPairGenerator}
 
 import com.kobu.handshaker.Server.requestsListener
-import com.kobu.handshaker.handlers.HelloWorldHandler
-import zio.RIO
-
+import com.kobu.handshaker.handlers.TmHandlerPq
+import zio.{RIO, Ref}
 
 object App extends scala.App {
 
@@ -15,31 +15,16 @@ object App extends scala.App {
   val serverZ = RIO(server)
 
   val runtime = zio.Runtime.default
-  runtime.unsafeRun(requestsListener(serverZ, new HelloWorldHandler))
+  val keyGen = KeyPairGenerator.getInstance("RSA")
+  keyGen.initialize(2048)
+  val pair: KeyPair = keyGen.generateKeyPair
+  val initServerState = ServerState(pair.getPrivate, pair.getPublic)
 
+  val app = for {
+    state <- Ref.make(initServerState)
+    _ <- requestsListener(serverZ, new TmHandlerPq(state))
+  } yield ()
 
-  //  implicit val exContext = ExecutionContext.fromExecutorService(Executors.newFixedThreadPool(4))
-  //
-  //  val hostAddress = new InetSocketAddress("127.0.0.1", 4999)
-  //
-  //  val server = AsynchronousServerSocketChannel.open()
-  //  server.bind(hostAddress)
-  //
-  //  val acceptResult: Future[AsynchronousSocketChannel] = Future(server.accept.get)
-  //
-  //
-  //  def listen(channel: AsynchronousSocketChannel): Unit  = {
-  //      var buffer = ByteBuffer.allocate(32)
-  //      val readResult = channel.read(buffer)
-  //      readResult.get
-  //      buffer.flip
-  //      val message = BitVector(buffer.array)
-  //      println(s"get income message: $message")
-  //      val writeResult = channel.write(message.reverseByteOrder.toByteBuffer)
-  //      writeResult.get
-  //      buffer.clear
-  //      listen(channel)
-  //    }
-  //
-  //  acceptResult.map(listen)
+  runtime.unsafeRun(app)
+
 }

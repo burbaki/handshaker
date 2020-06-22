@@ -5,7 +5,7 @@ import java.security.MessageDigest
 import java.time.Instant
 
 import com.kobu.handshaker.MessageEncodeDecode._
-import com.kobu.handshaker.{CryptoUtils, DHInnerData, PQInnerData, PqHeader, ReqDHParamsBody, Server, ServerDHParamsOk, ServerState}
+import com.kobu.handshaker.{CryptoUtils, DHInnerData, PQInnerData, PqHeader, ReqDHParamsBody, Server, ServerDHParamsFail, ServerDHParamsOk, ServerState}
 import javax.crypto.Cipher
 import scodec.bits.{ByteOrdering, ByteVector}
 import zio.blocking.Blocking
@@ -45,7 +45,7 @@ class TmHandlerDHParams(override val internalStateR: Ref[ServerState]) extends T
         val decrypted = ByteVector(cipher.doFinal(encryptedData.toArray)).drop(1).slice(20, 96 + 20)
         val internalClientData = decrypted.decode[PQInnerData]
         val validationResult = validation(internalClientData, reqBody, intrState)
-        val header = PqHeader(
+        val headerWithoutSize = PqHeader(
           ByteVector.fill(8)(0),
           ByteVector.fromLong(Instant.now.getEpochSecond, ordering = ByteOrdering.LittleEndian),
           _)
@@ -62,14 +62,16 @@ class TmHandlerDHParams(override val internalStateR: Ref[ServerState]) extends T
             val respBody = ServerDHParamsOk(reqBody.nonce,
               reqBody.serverNonce,
               encryptedAnswer).encode
-            ZIO(header(respBody.size.toInt), respBody, intrState)
+            headerWithoutSize(respBody.size.toInt)
+            ZIO(headerWithoutSize(respBody.size.toInt), respBody, intrState)
           }
           case Left(s) =>
-            val respBody = ServerDHParamsOk(reqBody.nonce,
+            val respBody = ServerDHParamsFail(reqBody.nonce,
               reqBody.serverNonce,
               internalClientData.newNonce
                 .digest(MessageDigest.getInstance("SHA1")).take(16)).encode
-            ZIO(header(respBody.size.toInt), respBody, intrState)
+
+            ZIO(headerWithoutSize(respBody.size.toInt), respBody, intrState)
         }
       }
       result <- Server.write(channel, respHeader.encode ++ respBody).map(_ => channel)

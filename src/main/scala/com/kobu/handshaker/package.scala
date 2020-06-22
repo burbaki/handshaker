@@ -121,15 +121,15 @@ package object handshaker {
   implicit val ServerDHParamsFailEncoder: MessageEncoder[ServerDHParamsFail] = (message: ServerDHParamsFail) => {
     serverDHParamsFail ++
       message.nonce ++
-      message.serverNonce
-    message.newNonceHash
+      message.serverNonce ++
+      message.newNonceHash
   }
 
   implicit val ServerDHParamsOkEncoder: MessageEncoder[ServerDHParamsOk] = (message: ServerDHParamsOk) => {
-    serverDHParamsFail ++
+    serverDHParamsOk ++
       message.nonce ++
-      message.serverNonce
-    message.encryptedAnswer
+      message.serverNonce ++
+      message.encryptedAnswer
   }
 
   val reqPqNumber: ByteVector = hex"60469778".reverse
