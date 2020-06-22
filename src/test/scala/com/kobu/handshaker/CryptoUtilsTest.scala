@@ -13,21 +13,21 @@ import scala.util.Random
 class CryptoUtilsTest extends AnyFunSuite with Matchers {
 
 
-  ignore(" 2 prime product should decomposing to the same primes ") {
-    val primes = CryptoUtils.generatePrimeProduct
-    val product = primes._1 * primes._2
-    val primesDecomposition = CryptoUtils.FermatFactor(product)
-
-    primesDecomposition shouldEqual primes
-  }
-
-  ignore(" 2 prime product should decomposing to the same primes in ByteVector") {
-    val primes = CryptoUtils.generatePrimeProduct
-    val product = ByteVector.fromLong((primes._1 * primes._2).toLong)
-    val primesDecomposition = CryptoUtils.FermatFactor(BigInt(product.toArray))
-
-    primesDecomposition shouldEqual primes
-  }
+//  ignore(" 2 prime product should decomposing to the same primes ") {
+//    val primes = CryptoUtils.generatePrimeProduct
+//    val product = primes._1 * primes._2
+//    val primesDecomposition = CryptoUtils.FermatFactor(product)
+//
+//    primesDecomposition shouldEqual primes
+//  }
+//
+//  ignore(" 2 prime product should decomposing to the same primes in ByteVector") {
+//    val primes = CryptoUtils.generatePrimeProduct
+//    val product = ByteVector.fromLong((primes._1 * primes._2).toLong)
+//    val primesDecomposition = CryptoUtils.FermatFactor(BigInt(product.toArray))
+//
+//    primesDecomposition shouldEqual primes
+//  }
 
   test("simple test") {
     val keyGen = KeyPairGenerator.getInstance("RSA")
